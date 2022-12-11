@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Document</title>
+</head>
+
+<body>
+	<p>Make sure you are on "localhost" and not "127.0.0.1"</p>
+	<label for="uname">Username:</label>
+	<input name="name" id="uname" type="text">
+	<button onclick="reg()">Register</button><br>
+	<button onclick="login()">Login</button>
+
+
+	<script type="module">
+		import * as webauthn from 'https://unpkg.com/@passwordless-id/webauthn'
+
+		var token
+
+		//ECMAScript modules (i.e type="module") is not globally scoped, so we explicitly add to window object.
+		window.reg = async function () {
+
+			//To get a nonce(random value) given by the server.
+			await fetch("http://localhost:8000/getNonce")
+				.then((res) => res.text())
+				.then((data) => { token = data })
+
+			//Get user input
+			const uname = document.getElementById("uname").value
+			console.log(uname)
+
+			//Use browser WebAuth Protocol
+			//Arguments are: 1.Username(default:"Demo"), 2. Nonce(so server can identify), 3.Authenticator type(Phone/PC/Security Key etc.) 4.Timeout(6 seconds)
+			const registration = await webauthn.client.register(uname ? uname : "Demo", "a7c61ef9-dc23-4806-b486-2428938a547e", {
+				"authenticatorType": "both",
+				"timeout": 60000,
+			})
+
+			console.log(registration.credetential.id);
+
+			//Send the registration object returned by the webauthn protocol to the server.
+			await fetch("http://localhost:8000/Register", {
+				method: "POST",
+				headers: {
+					'Accept': 'application/json',
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(registration)
+			})
+		}
+
+
+		window.login = async function () {
+			const authentication = await webauthn.authenticate(["3924HhJdJMy_svnUowT8eoXrOOO6NLP8SK85q2RPxdU"], "56535b13-5d93-4194-a282-f234c1c24500", {
+				"authenticatorType": "both",
+				"userVerification": "required",
+				"timeout": 60000
+			})
+		}
+
+
+	</script>
+
+
+</body>
+
+</html>

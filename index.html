@@ -10,6 +10,7 @@
 
 <body>
 	<p>Make sure you are on "localhost" and not "127.0.0.1"</p>
+	<p>Make sure you are running node version >=19.2.0</p>
 	<label for="uname">Username:</label>
 	<input name="name" id="uname" type="text">
 	<button onclick="reg()">Register</button><br>
@@ -20,6 +21,7 @@
 		import * as webauthn from 'https://unpkg.com/@passwordless-id/webauthn'
 
 		var token
+		var username
 
 		//ECMAScript modules (i.e type="module") is not globally scoped, so we explicitly add to window object.
 		window.reg = async function () {
@@ -30,17 +32,17 @@
 				.then((data) => { token = data })
 
 			//Get user input
-			const uname = document.getElementById("uname").value
-			console.log(uname)
+			username = document.getElementById("uname").value
+			console.log(username)
 
 			//Use browser WebAuth Protocol
 			//Arguments are: 1.Username(default:"Demo"), 2. Nonce(so server can identify), 3.Authenticator type(Phone/PC/Security Key etc.) 4.Timeout(6 seconds)
-			const registration = await webauthn.client.register(uname ? uname : "Demo", "a7c61ef9-dc23-4806-b486-2428938a547e", {
+			const registration = await webauthn.client.register(username ? username : "Demo", "a7c61ef9-dc23-4806-b486-2428938a547e", {
 				"authenticatorType": "both",
 				"timeout": 60000,
 			})
 
-			console.log(registration.credetential.id);
+			console.log(registration);
 
 			//Send the registration object returned by the webauthn protocol to the server.
 			await fetch("http://localhost:8000/Register", {
@@ -55,11 +57,50 @@
 
 
 		window.login = async function () {
-			const authentication = await webauthn.authenticate(["3924HhJdJMy_svnUowT8eoXrOOO6NLP8SK85q2RPxdU"], "56535b13-5d93-4194-a282-f234c1c24500", {
-				"authenticatorType": "both",
-				"userVerification": "required",
-				"timeout": 60000
-			})
+			try {
+				const response = await fetch("http://localhost:8000/getUsernameToId", {
+					method: "POST",
+					headers: {
+						'Accept': 'application/json',
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({ username })
+				})
+
+				if (!response.ok) {
+					throw new Error(`Error! status: ${response.status}`);
+				}
+
+				let currentUserId = await response.text()
+				console.log('currentUserId: ', currentUserId);
+
+				//Get an authentication object with the same credential ID, so we can send it to server using fetch.
+				const authentication = await webauthn.client.authenticate([currentUserId], "56535b13-5d93-4194-a282-f234c1c24500", {
+					"authenticatorType": "both",
+					"userVerification": "required",
+					"timeout": 60000
+				})
+				console.log('authentication: ', authentication);
+
+
+				const checkLoginStatus = await fetch("http://localhost:8000/Login", {
+					method: "POST",
+					headers: {
+						'Accept': 'application/json',
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(authentication)
+				})
+
+				if (!response.ok) {
+					throw new Error(`Error! status: ${response.status}`);
+				}
+
+				console.log("!!Success:", checkLoginStatus);
+			}
+			catch (e) {
+				console.log(e);
+			}
 		}
 
 

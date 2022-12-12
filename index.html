@@ -24,6 +24,7 @@
 		var username
 
 		//ECMAScript modules (i.e type="module") is not globally scoped, so we explicitly add to window object.
+		//When register button is clicked, following gets executed.
 		window.reg = async function () {
 
 			//To get a nonce(random value) given by the server.
@@ -31,21 +32,26 @@
 				.then((res) => res.text())
 				.then((data) => { nonce = data })
 
-			//Get user input
+			//Get user input from DOM
 			username = document.getElementById("uname").value
-			console.log(username)
-			console.log('nonce: ', nonce);
+
+			let registration
 
 			//Use browser WebAuth Protocol
 			//Arguments are: 1.Username(default:"Demo"), 2. Nonce(so server can identify), 3.Authenticator type(Phone/PC/Security Key etc.) 4.Timeout(6 seconds)
-			const registration = await webauthn.client.register(username ? username : "Demo", nonce, {
-				"authenticatorType": "both",
-				"timeout": 60000,
-			})
+			try {
+				registration = await webauthn.client.register(username ? username : "Demo", nonce, {
+					"authenticatorType": "both",
+					"timeout": 60000,
+				})
+				console.log(registration);
 
-			console.log(registration);
+			} catch (error) {
+				alert("Error, please make sure you are on 'localhost' and not '127.0.0.1':")
+				return
+			}
 
-			//Send the registration object returned by the webauthn protocol to the server.
+			//Send the registration object returned by the webauthn protocol to the node.js server.
 			await fetch("http://localhost:8000/Register", {
 				method: "POST",
 				headers: {
@@ -57,10 +63,14 @@
 
 		}
 
-
+		//When login button is clicked, following gets executed.
 		window.login = async function () {
 			try {
+
+				//Get user input from DOM
 				username = document.getElementById("uname").value
+
+				//Get the credential ID for the current user.
 				const response = await fetch("http://localhost:8000/getUsernameToId", {
 					method: "POST",
 					headers: {
@@ -70,18 +80,17 @@
 					body: JSON.stringify({ username })
 				})
 
+				//If error in the response, throw an alert.
 				if (!response.ok) {
 					throw new Error(response.status);
 				}
 
+				//Extracting credential ID
 				let currentJSON = await response.json()
-				console.log('currentJSON: ', currentJSON);
 				let currentUserId = currentJSON.id
 				let nonce = currentJSON.nonce
 
-				console.log('currentUserId: ', currentUserId);
-
-				//Get an authentication object with the same credential ID, so we can send it to server using fetch.
+				//Invoke webauth protocol with the same credential ID, so we can send "authentication" object to server using fetch.
 				const authentication = await webauthn.client.authenticate([currentUserId], nonce, {
 					"authenticatorType": "both",
 					"userVerification": "required",
@@ -89,7 +98,8 @@
 				})
 				console.log('authentication: ', authentication);
 
-				const checkLoginStatus = await fetch("http://localhost:8000/Login", {
+				//Sends "authentication" object to server 
+				const response2 = await fetch("http://localhost:8000/Login", {
 					method: "POST",
 					headers: {
 						'Accept': 'application/json',
@@ -98,8 +108,9 @@
 					body: JSON.stringify(authentication)
 				})
 
-				if (!checkLoginStatus.ok) {
-					throw new Error(response.status);
+				//If error in the response, throw an alert.		
+				if (!response2.ok) {
+					throw new Error(response2.status);
 				}
 
 				alert("Login successful, username: " + username)
